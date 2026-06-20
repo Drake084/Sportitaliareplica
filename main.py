@@ -200,7 +200,7 @@ async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Chat ID: {chat.id}")
 app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, save_topic))
-
+app.add_handler(CommandHandler("id", debug))
 app.post_init = loop
 
 app.run_polling()
