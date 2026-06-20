@@ -194,8 +194,10 @@ async def loop(app):
 
 app = ApplicationBuilder().token(TOKEN).build()
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CommandHandler("scan", manual_scan))
+async def debug(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    print("CHAT ID:", chat.id)
+    await update.message.reply_text(f"Chat ID: {chat.id}")
 app.add_handler(CallbackQueryHandler(button))
 app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, save_topic))
 
