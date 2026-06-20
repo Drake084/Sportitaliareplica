@@ -19,7 +19,7 @@ from telegram.ext import (
 
 TOKEN = "8966520790:AAFuQygvUyhq1NTJNmRxzGLJCZFmMDi1DMQ"
 ADMIN_ID = int(os.getenv("ADMIN_ID", "123456789"))
-GROUP_ID = int(os.getenv("GROUP_ID", "-1001234567890"))
+GROUP_ID = int(os.getenv("GROUP_ID", "-1004398274633"))
 
 TOPIC_FILE = "topics.json"
 
