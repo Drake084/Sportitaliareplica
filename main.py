@@ -1,5 +1,6 @@
 import os
 import asyncio
+import json
 import requests
 from bs4 import BeautifulSoup
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
@@ -7,18 +8,39 @@ from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     CallbackQueryHandler,
-    ContextTypes
+    ContextTypes,
+    MessageHandler,
+    filters
 )
 
-# 🔑 CONFIG
-TOKEN = os.getenv("TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
-GROUP_ID = int(os.getenv("GROUP_ID", "0"))
+# =========================
+# CONFIG
+# =========================
 
-# 🧠 memoria duplicati
+TOKEN = "8966520790:AAFuQygvUyhq1NTJNmRxzGLJCZFmMDi1DMQ"
+ADMIN_ID = int(os.getenv("ADMIN_ID", "123456789"))
+GROUP_ID = int(os.getenv("GROUP_ID", "-1001234567890"))
+
+TOPIC_FILE = "topics.json"
+
+def load_topics():
+    try:
+        with open(TOPIC_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_topics():
+    with open(TOPIC_FILE, "w") as f:
+        json.dump(TOPIC_MAP, f)
+
+TOPIC_MAP = load_topics()
 seen = set()
 
-# 💰 PREZZI
+# =========================
+# PREZZI
+# =========================
+
 PRICES = {
     "Serie A": 17,
     "Premier League": 17,
@@ -39,7 +61,10 @@ PRICES = {
     "New Arrivals": 17
 }
 
-# 🌐 YUPOO CATEGORIE
+# =========================
+# YUPOO
+# =========================
+
 YUPOO = {
     "Serie A": "https://www.yupoo.shop/category/Serie%20A",
     "Premier League": "https://www.yupoo.shop/category/Premier%20League",
@@ -60,7 +85,10 @@ YUPOO = {
     "New Arrivals": "https://www.yupoo.shop/category/New%20Arrivals"
 }
 
-# 🔍 SCRAPER
+# =========================
+# SCRAPER
+# =========================
+
 def scrape(url):
     try:
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
@@ -71,28 +99,33 @@ def scrape(url):
             src = img.get("src")
             alt = img.get("alt")
 
-            if src and "http" in src:
-                items.append({
-                    "name": alt or "Maglia",
-                    "photo": src
-                })
+            if src:
+                items.append({"name": alt or "Maglia", "photo": src})
 
         return items
     except:
         return []
 
-# 🔘 BOTTONE
+# =========================
+# KEYBOARD
+# =========================
+
 def keyboard(name):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📩 Contattami", callback_data=f"contact|{name}")]
     ])
 
-# 📤 INVIO
+# =========================
+# SEND PHOTO (PRO FIX TOPIC)
+# =========================
+
 async def send(app, name, photo, category):
     price = PRICES.get(category, 17)
+    thread_id = TOPIC_MAP.get(category)
 
     await app.bot.send_photo(
         chat_id=GROUP_ID,
+        message_thread_id=thread_id,
         photo=photo,
         caption=f"""🔥 NUOVA MAGLIA
 
@@ -103,7 +136,10 @@ async def send(app, name, photo, category):
         reply_markup=keyboard(name)
     )
 
-# 🔁 SCAN
+# =========================
+# SCAN
+# =========================
+
 async def scan(app):
     for cat, url in YUPOO.items():
         items = scrape(url)
@@ -115,38 +151,54 @@ async def scan(app):
             seen.add(i["photo"])
             await send(app, i["name"], i["photo"], cat)
 
-# ▶️ START
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔥 Bot attivo e online!")
+# =========================
+# COMMANDS
+# =========================
 
-# 🔄 SCAN MANUALE
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔥 Bot attivo PRO")
+
 async def manual_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔄 Scan avviato...")
     await scan(context.application)
     await update.message.reply_text("✅ Scan completato")
 
-# 💬 BOTTONE CALLBACK
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     await q.message.reply_text("📩 Richiesta inviata all'admin")
 
-# 🔁 LOOP OGNI 6 ORE
+# =========================
+# AUTO SAVE TOPIC (PRO CORE)
+# =========================
+
+async def save_topic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+    thread = update.message.message_thread_id
+    text = update.message.text
+
+    if thread and text and not text.startswith("/"):
+        category = chat.title
+
+        TOPIC_MAP[category] = thread
+        save_topics()
+
+# =========================
+# MAIN LOOP
+# =========================
+
 async def loop(app):
     while True:
         await scan(app)
         await asyncio.sleep(21600)
 
-# 🚀 APP
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("scan", manual_scan))
 app.add_handler(CallbackQueryHandler(button))
+app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, save_topic))
 
-async def post_init(application):
-    application.create_task(loop(application))
-
-app.post_init = post_init
+app.post_init = loop
 
 app.run_polling()
