@@ -3,15 +3,22 @@ import asyncio
 import requests
 from bs4 import BeautifulSoup
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    CallbackQueryHandler,
+    ContextTypes
+)
 
+# 🔑 CONFIG
 TOKEN = os.getenv("TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 GROUP_ID = int(os.getenv("GROUP_ID", "0"))
 
-TOPIC_MAP = {}
+# 🧠 memoria duplicati
 seen = set()
 
+# 💰 PREZZI
 PRICES = {
     "Serie A": 17,
     "Premier League": 17,
@@ -32,6 +39,7 @@ PRICES = {
     "New Arrivals": 17
 }
 
+# 🌐 YUPOO CATEGORIE
 YUPOO = {
     "Serie A": "https://www.yupoo.shop/category/Serie%20A",
     "Premier League": "https://www.yupoo.shop/category/Premier%20League",
@@ -52,6 +60,7 @@ YUPOO = {
     "New Arrivals": "https://www.yupoo.shop/category/New%20Arrivals"
 }
 
+# 🔍 SCRAPER
 def scrape(url):
     try:
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
@@ -62,18 +71,23 @@ def scrape(url):
             src = img.get("src")
             alt = img.get("alt")
 
-            if src:
-                items.append({"name": alt or "Maglia", "photo": src})
+            if src and "http" in src:
+                items.append({
+                    "name": alt or "Maglia",
+                    "photo": src
+                })
 
         return items
     except:
         return []
 
+# 🔘 BOTTONE
 def keyboard(name):
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("📩 Contattami", callback_data=f"contact|{name}")]
     ])
 
+# 📤 INVIO
 async def send(app, name, photo, category):
     price = PRICES.get(category, 17)
 
@@ -89,6 +103,7 @@ async def send(app, name, photo, category):
         reply_markup=keyboard(name)
     )
 
+# 🔁 SCAN
 async def scan(app):
     for cat, url in YUPOO.items():
         items = scrape(url)
@@ -100,30 +115,38 @@ async def scan(app):
             seen.add(i["photo"])
             await send(app, i["name"], i["photo"], cat)
 
+# ▶️ START
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔥 Bot attivo")
+    await update.message.reply_text("🔥 Bot attivo e online!")
 
+# 🔄 SCAN MANUALE
 async def manual_scan(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🔄 Scan avviato...")
     await scan(context.application)
     await update.message.reply_text("✅ Scan completato")
 
+# 💬 BOTTONE CALLBACK
 async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     await q.message.reply_text("📩 Richiesta inviata all'admin")
 
+# 🔁 LOOP OGNI 6 ORE
 async def loop(app):
     while True:
         await scan(app)
         await asyncio.sleep(21600)
 
+# 🚀 APP
 app = ApplicationBuilder().token(TOKEN).build()
 
 app.add_handler(CommandHandler("start", start))
 app.add_handler(CommandHandler("scan", manual_scan))
 app.add_handler(CallbackQueryHandler(button))
 
-app.post_init = loop
+async def post_init(application):
+    application.create_task(loop(application))
+
+app.post_init = post_init
 
 app.run_polling()
